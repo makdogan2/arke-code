@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# AI Model and Checkpoints
+finetuned_model/
+*.safetensors
+*.pt
+*.bin
+*.pth
