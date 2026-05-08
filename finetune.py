@@ -22,13 +22,6 @@ OUTPUT_DIR = "./finetuned_model"
 DATA_FILE = "training_data.json"
 
 SYSTEM_PROMPT = """Sen uzman bir yazılım mühendisisin. Adın "Code Assistant".
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-SADECE TÜRKÇE cevap ver. Asla Çince, Japonca veya başka bir dil kullanma.
-=======
->>>>>>> b893943f309bd34c665722ceb6077ca77d160779
->>>>>>> b58b1ff (chore: remove large model files and update gitignore)
 Türkçe açıklama yap, kod İngilizce olsun.
 Çalışan, test edilebilir kod ver.
 Neden böyle yazdığını açıkla.
