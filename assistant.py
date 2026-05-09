@@ -9,13 +9,7 @@ from peft import PeftModel
 BASE_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"
 FINETUNED_PATH = "./finetuned_model"
 
-<<<<<<< HEAD
-SYSTEM_PROMPT = """Sen uzman bir yazilim muhendisisin. Adin "Code Assistant".
-SADECE TURKCE cevap ver. Asla Cince, Japonca veya baska bir dil kullanma.
-Turkce aciklama yap, kod Ingilizce olsun.
-Calisan, test edilebilir kod ver.
-Neden boyle yazdigini acikla.
-=======
+#=======
 SYSTEM_PROMPT = """Sen uzman bir yazılım mühendisisin. Adın "Code Assistant".
 Türkçe açıklama yap, kod İngilizce olsun.
 SADECE TÜRKÇE cevap ver,asla başka dil kullanma.
