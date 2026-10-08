@@ -33,10 +33,8 @@ so Ollama splits it between VRAM and system RAM and it still runs fast.
 |------|---------|
 | `assistant.py` | CLI chat client using the Ollama REST API |
 | `Modelfile` | Base model, system prompt and parameters |
-| `download_datasets.py` | Builds a combined instruction dataset (CodeAlpaca, Evol-Instruct-Code, CodeFeedback) |
-| `training_data.py` | Small hand-written dataset from early experiments |
-| `finetune.py`, `finetune_14b.py` | QLoRA fine-tuning scripts (4-bit, LoRA r=16, gradient checkpointing) |
-| `web_chat.py` | Gradio web UI (legacy, from the transformers-based version) |
+| `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
+| `finetune.py` | QLoRA fine-tuning script from early experiments (4-bit, LoRA r=16, gradient checkpointing) |
 
 ## Roadmap
 
