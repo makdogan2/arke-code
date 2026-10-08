@@ -27,11 +27,32 @@ so Ollama splits it between VRAM and system RAM and it still runs fast.
 4. `pip install -r requirements.txt`
 5. `python assistant.py`
 
+## Evaluation
+
+`eval.py` measures the model with numbers instead of impressions. Every training round
+must beat the last recorded score before it replaces the current model.
+
+```
+python eval.py --check                        # verify the eval set itself (no model needed)
+python eval.py                                # 22 custom tasks on arke-code
+python eval.py --suite humaneval --limit 40   # first 40 HumanEval problems
+python eval.py --model qwen3-coder --suite all
+```
+
+- **Custom suite** (`evals/custom_tasks.py`): 20 implementation and bug-fix tasks checked by
+  hidden tests, plus 2 test-writing tasks. Written tests must pass on the correct function,
+  catch every planted bug (mutation testing) and avoid `== True` comparisons.
+- **HumanEval** ([OpenAI](https://github.com/openai/human-eval), MIT): the standard Python
+  function-completion benchmark, cached in `evals/`.
+- Generated code runs in a separate process with a timeout. Each run is saved under
+  `results/`, and one summary line is appended to `results/scores.csv`.
+
 ## Project structure
 
 | File | Purpose |
 |------|---------|
 | `assistant.py` | CLI chat client using the Ollama REST API |
+| `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
 | `finetune.py` | QLoRA fine-tuning script from early experiments (4-bit, LoRA r=16, gradient checkpointing) |

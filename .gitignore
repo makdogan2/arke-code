@@ -226,3 +226,6 @@ checkpoints/
 *.bin
 *.gguf
 combined_training_data.json
+
+# Eval: keep the score history, not every raw run
+results/*.json
