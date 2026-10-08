@@ -5,6 +5,7 @@ Usage:
     python eval.py                                  # run the custom suite on arke-code
     python eval.py --suite humaneval --limit 40     # first 40 HumanEval problems
     python eval.py --model qwen3-coder --suite all  # compare against another Ollama model
+    python eval.py --tag prompt-v2                  # label a round in scores.csv
 
 Every run is saved to results/<model>_<suite>_<time>.json, and one summary line is
 appended to results/scores.csv, so progress across training rounds stays visible.
@@ -168,7 +169,7 @@ def build_jobs(suite, limit):
     return jobs
 
 
-def run_eval(model, suite, limit, num_ctx):
+def run_eval(model, suite, limit, num_ctx, tag=""):
     jobs = build_jobs(suite, limit)
     print(f"Evaluating {model} on {len(jobs)} tasks ({suite})\n")
     records, started = [], time.time()
@@ -193,13 +194,13 @@ def run_eval(model, suite, limit, num_ctx):
         sub = [r for r in records if r["suite"] == s]
         print(f"  {s}: {sum(r['passed'] for r in sub)}/{len(sub)}")
 
-    save(model, suite, records, passed, pct, speed)
+    save(f"{model}@{tag}" if tag else model, suite, records, passed, pct, speed)
 
 
 def save(model, suite, records, passed, pct, speed):
     RESULTS.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
-    safe = model.replace(":", "_").replace("/", "_")
+    safe = model.replace(":", "_").replace("/", "_").replace("@", "_")
     detail_path = RESULTS / f"{safe}_{suite}_{stamp}.json"
     detail_path.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -220,6 +221,7 @@ def main():
     ap.add_argument("--limit", type=int, default=40, help="HumanEval problems to use (max 164)")
     ap.add_argument("--num-ctx", type=int, default=8192)
     ap.add_argument("--check", action="store_true", help="validate the eval set, no model needed")
+    ap.add_argument("--tag", default="", help="label for this round in scores.csv, e.g. prompt-v2")
     args = ap.parse_args()
 
     if args.check:
@@ -228,7 +230,7 @@ def main():
         requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
     except requests.exceptions.RequestException:
         sys.exit("Ollama is not running. Open the Ollama app and try again.")
-    run_eval(args.model, args.suite, args.limit, args.num_ctx)
+    run_eval(args.model, args.suite, args.limit, args.num_ctx, args.tag)
 
 
 if __name__ == "__main__":
