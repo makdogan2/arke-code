@@ -10,8 +10,10 @@ The name comes from the Greek *arkhe*: "first principle", the starting point of 
 
 - Runs 100% locally: no API keys, no data leaves your machine
 - Streaming responses with conversation memory
-- Reads your project on its own: `list_dir` and `read_file` tools through Ollama tool calling,
-  sandboxed to the project folder and read-only for now
+- Works on your project through Ollama tool calling, confined to the project folder:
+  - reads freely: `list_dir`, `read_file`, `grep`, `git_diff`
+  - asks first, showing a diff or the exact command: `edit_file`, `write_file`, `run_python`,
+    `run_tests` (default answer is no)
 - Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/quit`
 - Warm, concise persona defined in the `Modelfile`
 
@@ -41,6 +43,18 @@ What the numbers taught so far:
 - **Measure the measurement:** an early version of the harness told test-writing tasks to
   return "the complete code", which made the model paste the function under test. Fixing the
   instruction, not the model, moved that task from fail to pass.
+
+## Try the agent
+
+`examples/buggy_stats` is a tiny project with one failing test:
+
+```
+python assistant.py --root examples/buggy_stats
+You > The tests are failing. Find the bug and fix it.
+```
+
+Arke Code runs the tests, reads the code, proposes an edit as a diff, and runs the tests
+again once you approve.
 
 ## Hardware
 
@@ -81,7 +95,8 @@ python eval.py --model qwen3-coder --suite all
 | File | Purpose |
 |------|---------|
 | `assistant.py` | CLI chat client using the Ollama REST API, with a tool-calling loop |
-| `tools.py` | Read-only project tools (`list_dir`, `read_file`) confined to the workspace |
+| `tools.py` | Project tools confined to the workspace; changes and runs need confirmation |
+| `examples/buggy_stats/` | Small project with a planted bug, for trying the agent |
 | `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
@@ -91,8 +106,8 @@ python eval.py --model qwen3-coder --suite all
 
 - [x] **Phase 0:** Ollama-based assistant with a custom persona
 - [x] **Phase 1:** Evaluation suite (custom tasks + HumanEval) with a recorded baseline
-- [ ] **Phase 2:** Agentic tools: read-only `list_dir` / `read_file` done; write files, run tests
-  and git diff next, with confirmation
+- [ ] **Phase 2:** Agentic tools: read, search, edit, run tests and git diff with confirmation done;
+  next: an agent eval that scores bug fixing end to end
 - [ ] **Phase 3:** Project memory (RAG with local embeddings)
 - [ ] **Phase 4:** VS Code integration
 - [ ] **Phase 5:** Continuous, eval-gated fine-tuning (QLoRA, GGUF export, back into Ollama)

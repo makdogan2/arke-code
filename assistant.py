@@ -62,6 +62,11 @@ def stream_reply(max_tokens, temperature):
     return text, tool_calls
 
 
+def short(value, limit=60):
+    text = repr(value)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 def chat(user_message, max_tokens, temperature):
     conversation_history.append({"role": "user", "content": user_message})
     for _ in range(MAX_TOOL_ROUNDS):
@@ -78,7 +83,7 @@ def chat(user_message, max_tokens, temperature):
             args = call["function"].get("arguments") or {}
             if isinstance(args, str):
                 args = json.loads(args or "{}")
-            shown = ", ".join(f"{k}={v!r}" for k, v in args.items())
+            shown = ", ".join(f"{k}={short(v)}" for k, v in args.items())
             print(f"\n  [tool] {name}({shown})", flush=True)
             result = workspace.call(name, args)
             conversation_history.append({"role": "tool", "tool_name": name, "content": result})
@@ -107,7 +112,9 @@ def main():
     print("=" * 60)
     print("  ARKE CODE - local code assistant")
     print("=" * 60)
-    print(f"Project: {workspace.root}  (tools: list_dir, read_file; read-only)")
+    print(f"Project: {workspace.root}")
+    print("Tools: list_dir, read_file, grep, git_diff | ask first: edit_file, write_file, "
+          "run_python, run_tests")
     print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings")
 
     max_tokens = 2048
