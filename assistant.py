@@ -1,13 +1,17 @@
+import argparse
 import json
 import sys
 
 import requests
+
+from tools import TOOL_SPECS, Workspace
 
 # === CONFIG ===
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "arke-code"  # change here if the model is renamed
 
 conversation_history = []
+workspace = Workspace(".")
 
 
 def check_ollama():
@@ -23,26 +27,62 @@ def check_ollama():
         sys.exit(1)
 
 
-def chat(user_message, max_tokens, temperature):
-    conversation_history.append({"role": "user", "content": user_message})
+MAX_TOOL_ROUNDS = 8
+
+
+def trimmed_history(limit=30):
+    """Last messages, never starting in the middle of a tool exchange."""
+    msgs = conversation_history[-limit:]
+    while msgs and msgs[0]["role"] != "user":
+        msgs = msgs[1:]
+    return msgs
+
+
+def stream_reply(max_tokens, temperature):
+    """One model call. Streams text to the screen, returns (text, tool_calls)."""
     payload = {
         "model": MODEL_NAME,
-        "messages": conversation_history[-20:],
+        "messages": trimmed_history(),
+        "tools": TOOL_SPECS,
         "stream": True,
         "options": {"temperature": temperature, "num_predict": max_tokens},
     }
-
-    full_response = ""
+    text, tool_calls = "", []
     with requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True) as r:
+        r.raise_for_status()
         for line in r.iter_lines():
             if not line:
                 continue
-            chunk = json.loads(line).get("message", {}).get("content", "")
-            print(chunk, end="", flush=True)
-            full_response += chunk
-    print()
+            msg = json.loads(line).get("message", {})
+            chunk = msg.get("content", "")
+            if chunk:
+                print(chunk, end="", flush=True)
+                text += chunk
+            tool_calls.extend(msg.get("tool_calls") or [])
+    return text, tool_calls
 
-    conversation_history.append({"role": "assistant", "content": full_response})
+
+def chat(user_message, max_tokens, temperature):
+    conversation_history.append({"role": "user", "content": user_message})
+    for _ in range(MAX_TOOL_ROUNDS):
+        text, tool_calls = stream_reply(max_tokens, temperature)
+        message = {"role": "assistant", "content": text}
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+        conversation_history.append(message)
+        if not tool_calls:
+            print()
+            return
+        for call in tool_calls:
+            name = call["function"]["name"]
+            args = call["function"].get("arguments") or {}
+            if isinstance(args, str):
+                args = json.loads(args or "{}")
+            shown = ", ".join(f"{k}={v!r}" for k, v in args.items())
+            print(f"\n  [tool] {name}({shown})", flush=True)
+            result = workspace.call(name, args)
+            conversation_history.append({"role": "tool", "tool_name": name, "content": result})
+    print("\n  (stopped: too many tool calls in a row)")
 
 
 def read_pasted_code():
@@ -58,11 +98,16 @@ def read_pasted_code():
 
 
 def main():
+    global workspace
+    ap = argparse.ArgumentParser(description="Arke Code, a local coding assistant.")
+    ap.add_argument("--root", default=".", help="project folder the assistant may read (default: here)")
+    workspace = Workspace(ap.parse_args().root)
     check_ollama()
 
     print("=" * 60)
-    print(f"  ARKE CODE - local code assistant")
+    print("  ARKE CODE - local code assistant")
     print("=" * 60)
+    print(f"Project: {workspace.root}  (tools: list_dir, read_file; read-only)")
     print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings")
 
     max_tokens = 2048
@@ -98,12 +143,12 @@ def main():
             continue
         if user_input == "/settings":
             print(f"  Model: {MODEL_NAME} | Temp: {temp} | Max tokens: {max_tokens} "
-                  f"| History: {len(conversation_history)} messages")
+                  f"| History: {len(conversation_history)} messages | Project: {workspace.root}")
             continue
         if user_input == "/paste":
             user_input = read_pasted_code()
 
-        print(f"\nArke Code > ", end="", flush=True)
+        print("\nArke Code > ", end="", flush=True)
         chat(user_input, max_tokens, temp)
 
 

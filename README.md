@@ -10,6 +10,8 @@ The name comes from the Greek *arkhe*: "first principle", the starting point of 
 
 - Runs 100% locally: no API keys, no data leaves your machine
 - Streaming responses with conversation memory
+- Reads your project on its own: `list_dir` and `read_file` tools through Ollama tool calling,
+  sandboxed to the project folder and read-only for now
 - Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/quit`
 - Warm, concise persona defined in the `Modelfile`
 
@@ -25,7 +27,7 @@ so Ollama splits it between VRAM and system RAM and it still runs fast.
 2. `ollama pull qwen3-coder`
 3. `ollama create arke-code -f Modelfile`
 4. `pip install -r requirements.txt`
-5. `python assistant.py`
+5. `python assistant.py` (or `python assistant.py --root path/to/your/project`)
 
 ## Evaluation
 
@@ -51,7 +53,8 @@ python eval.py --model qwen3-coder --suite all
 
 | File | Purpose |
 |------|---------|
-| `assistant.py` | CLI chat client using the Ollama REST API |
+| `assistant.py` | CLI chat client using the Ollama REST API, with a tool-calling loop |
+| `tools.py` | Read-only project tools (`list_dir`, `read_file`) confined to the workspace |
 | `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
