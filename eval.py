@@ -39,6 +39,8 @@ RUN_TIMEOUT = 15  # seconds per program
 
 CODE_ONLY = ("\n\nReply with a single ```python code block containing the complete code. "
              "No explanation, no example usage.")
+TESTS_ONLY = ("\n\nReply with a single ```python code block containing only the test code. "
+              "No explanation.")
 STYLE_SMELL = re.compile(r"[=!]=\s*(True|False)\b")
 
 
@@ -160,7 +162,8 @@ def build_jobs(suite, limit):
     jobs = []
     if suite in ("custom", "all"):
         for t in TASKS:
-            jobs.append(("custom", t["id"], t["prompt"] + CODE_ONLY,
+            suffix = TESTS_ONLY if t["kind"] == "write_tests" else CODE_ONLY
+            jobs.append(("custom", t["id"], t["prompt"] + suffix,
                          lambda code, t=t: score_custom(t, code)))
     if suite in ("humaneval", "all"):
         for p in load_humaneval()[:limit]:
