@@ -15,6 +15,33 @@ The name comes from the Greek *arkhe*: "first principle", the starting point of 
 - Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/quit`
 - Warm, concise persona defined in the `Modelfile`
 
+## Results (v0.1)
+
+Measured with `eval.py` on an RTX 5070 Ti, temperature 0, one attempt per task (pass@1).
+
+| Benchmark | Score |
+|-----------|-------|
+| HumanEval, all 164 problems | **149 / 164 (90.9%)** |
+| Custom suite, 22 tasks | **20 / 22 (90.9%)** |
+| Generation speed | ~90 tokens/s |
+
+HumanEval is scored by this repo's own harness (the model returns the full function, which
+is run against the official tests), not the official evaluation script.
+
+What the numbers taught so far:
+
+- **Known weaknesses:** accepts out-of-order input such as `"1m1h"` when asked to reject it, and
+  writes `assert x == True` in tests even when told not to. These are the first targets for
+  fine-tuning.
+- **Prompt rules vs. training:** adding explicit engineering rules to the system prompt scored
+  20/22 on the custom suite, the same as the plain prompt. Habits like `== True` did not
+  change, which is the case for fine-tuning rather than more prompting.
+- **Noise:** repeated runs of the same model differ by about one task, so a change has to win
+  by more than that, across several runs, before it counts as an improvement.
+- **Measure the measurement:** an early version of the harness told test-writing tasks to
+  return "the complete code", which made the model paste the function under test. Fixing the
+  instruction, not the model, moved that task from fail to pass.
+
 ## Hardware
 
 Developed on an RTX 5070 Ti (16 GB VRAM) with 32 GB RAM.
@@ -63,8 +90,9 @@ python eval.py --model qwen3-coder --suite all
 ## Roadmap
 
 - [x] **Phase 0:** Ollama-based assistant with a custom persona
-- [ ] **Phase 1:** Evaluation suite (custom tasks + HumanEval subset)
-- [ ] **Phase 2:** Agentic tools (read/write files, run tests, git diff) with confirmation
+- [x] **Phase 1:** Evaluation suite (custom tasks + HumanEval) with a recorded baseline
+- [ ] **Phase 2:** Agentic tools: read-only `list_dir` / `read_file` done; write files, run tests
+  and git diff next, with confirmation
 - [ ] **Phase 3:** Project memory (RAG with local embeddings)
 - [ ] **Phase 4:** VS Code integration
 - [ ] **Phase 5:** Continuous, eval-gated fine-tuning (QLoRA, GGUF export, back into Ollama)
