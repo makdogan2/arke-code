@@ -591,6 +591,8 @@ def clamp(x, lo, hi):
     return max(lo + 1, min(x, hi)) if x < lo else max(lo, min(x, hi))
 ''',
         ],
+        "bug_notes": ["ignores the upper bound", "never raises ValueError",
+                      "returns lo + 1 below the range"],
         "example_tests": '''
 assert clamp(5, 0, 10) == 5
 assert clamp(-3, 0, 10) == 0
@@ -632,6 +634,8 @@ def is_leap(year: int) -> bool:
     return year % 400 == 0
 ''',
         ],
+        "bug_notes": ["calls 1900 a leap year", "misses the 400-year rule (2000)",
+                      "only knows the 400-year rule (2024)"],
         "example_tests": '''
 assert is_leap(2024)
 assert is_leap(2000)

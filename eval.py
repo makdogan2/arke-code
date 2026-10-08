@@ -76,8 +76,21 @@ def run_program(source):
             return False, f"timeout after {RUN_TIMEOUT}s"
     if proc.returncode == 0:
         return True, ""
-    lines = proc.stderr.strip().splitlines()
-    return False, lines[-1][:200] if lines else f"exit code {proc.returncode}"
+    return False, describe_error(proc.stderr) or f"exit code {proc.returncode}"
+
+
+def describe_error(stderr):
+    """Last error line plus the program line that raised it, e.g.
+    'AssertionError at: assert flatten(["ab"]) == ["ab"]'."""
+    lines = stderr.strip().splitlines()
+    if not lines:
+        return ""
+    culprit = ""
+    for i, line in enumerate(lines[:-1]):
+        if 'program.py", line' in line and i + 1 < len(lines):
+            culprit = lines[i + 1].strip()
+    error = lines[-1].strip()
+    return f"{error} at: {culprit}"[:240] if culprit else error[:240]
 
 
 # --------------------------------------------------------------- task scoring
@@ -90,13 +103,16 @@ def score_custom(task, code):
     # write_tests: must pass on the reference, fail on every mutant, avoid `== True`
     if STYLE_SMELL.search(code):
         return False, "style: compares with == True / == False"
+    name = re.search(r"def (\w+)", task["reference"]).group(1)
+    if re.search(rf"^\s*def {name}\b", code, re.MULTILINE):
+        return False, f"redefines {name}(), so the planted bugs are never tested"
     ok, err = run_program(task["reference"] + "\n\n" + code)
     if not ok:
         return False, f"fails on correct code: {err}"
     for i, mutant in enumerate(task["mutants"], 1):
         survived, _ = run_program(mutant + "\n\n" + code)
         if survived:
-            return False, f"misses bug #{i}"
+            return False, f"misses bug #{i}: {task['bug_notes'][i - 1]}"
     return True, ""
 
 
