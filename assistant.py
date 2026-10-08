@@ -1,139 +1,111 @@
-import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+import json
+import sys
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from peft import PeftModel
+import requests
 
 # === CONFIG ===
-BASE_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct"
-FINETUNED_PATH = "./finetuned_model"
-
-#=======
-SYSTEM_PROMPT = """Sen uzman bir yazılım mühendisisin. Adın "Code Assistant".
-Türkçe açıklama yap, kod İngilizce olsun.
-SADECE TÜRKÇE cevap ver,asla başka dil kullanma.
-Çalışan, test edilebilir kod ver.
-Neden böyle yazdığını açıkla.
->>>>>>> b893943f309bd34c665722ceb6077ca77d160779
-Best practice ve clean code prensiplerine uy."""
-
-# === LOAD MODEL ===
-print("Fine-tuned model yükleniyor...")
-
-tokenizer = AutoTokenizer.from_pretrained(FINETUNED_PATH)
-
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True,
-)
-
-base_model = AutoModelForCausalLM.from_pretrained(
-    BASE_MODEL,
-    quantization_config=bnb_config,
-    device_map="auto",
-)
-
-# LoRA ağırlıklarını yükle ve GPU'ya taşı
-model = PeftModel.from_pretrained(
-    base_model,
-    FINETUNED_PATH,
-    torch_dtype=torch.float16,
-    device_map="auto",
-)
-
-# LoRA katmanlarını merge et (device sorunu çözülür)
-print("LoRA katmanları merge ediliyor...")
-model = model.merge_and_unload()
-model.eval()
-
-print("Model hazır!")
-
-# === CHAT ===
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+OLLAMA_URL = "http://localhost:11434"
+MODEL_NAME = "arke-code"  # change here if the model is renamed
 
 conversation_history = []
 
-def chat(user_message, max_tokens=1024, temperature=0.3):
+
+def check_ollama():
+    try:
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        models = [m["name"] for m in r.json().get("models", [])]
+    except requests.exceptions.RequestException:
+        print("Ollama is not running. Open the Ollama app and try again.")
+        sys.exit(1)
+    if not any(m.split(":")[0] == MODEL_NAME for m in models):
+        print(f"Model '{MODEL_NAME}' not found. Available: {models}")
+        print(f"Create it with: ollama create {MODEL_NAME} -f Modelfile")
+        sys.exit(1)
+
+
+def chat(user_message, max_tokens, temperature):
     conversation_history.append({"role": "user", "content": user_message})
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[-10:]
-    
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            do_sample=True,
-            top_p=0.9,
-            repetition_penalty=1.1,
-        )
-    
-    response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-    conversation_history.append({"role": "assistant", "content": response})
-    return response
+    payload = {
+        "model": MODEL_NAME,
+        "messages": conversation_history[-20:],
+        "stream": True,
+        "options": {"temperature": temperature, "num_predict": max_tokens},
+    }
 
-# === UI ===
-print("\n" + "="*60)
-print("   (FINE-TUNED)")
-print("  Qwen2.5-Coder-7B + LoRA Fine-tuning")
-print("="*60)
-print("\nKomutlar:")
-print("  /quit       Cikis")
-print("  /clear      Sohbet gecmisini temizle")
-print("  /temp 0.5   Temperature degistir")
-print("  /long       Uzun cevap (2048 token)")
-print("  /short      Kisa cevap (256 token)")
-print("  /paste      Cok satirli kod yapistir")
-print("="*60)
-
-max_tokens = 1024
-temp = 0.3
-
-while True:
+    full_response = ""
+    with requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True) as r:
+        for line in r.iter_lines():
+            if not line:
+                continue
+            chunk = json.loads(line).get("message", {}).get("content", "")
+            print(chunk, end="", flush=True)
+            full_response += chunk
     print()
-    user_input = input("Sen > ").strip()
-    
-    if not user_input:
-        continue
-    if user_input == "/quit":
-        print("Gorusuruz!")
-        break
-    elif user_input == "/clear":
-        conversation_history.clear()
-        print("  Sohbet gecmisi temizlendi.")
-        continue
-    elif user_input.startswith("/temp "):
-        try:
-            temp = float(user_input.split()[1])
-            temp = max(0.1, min(2.0, temp))
-            print(f"  Temperature: {temp}")
-        except:
-            print("  Kullanim: /temp 0.5")
-        continue
-    elif user_input == "/long":
-        max_tokens = 2048
-        print("  Max tokens: 2048")
-        continue
-    elif user_input == "/short":
-        max_tokens = 256
-        print("  Max tokens: 256")
-        continue
-    elif user_input == "/paste":
-        print("  Kodu yapistir, bos satir ile bitir:")
-        lines = []
-        while True:
-            line = input()
-            if line == "":
-                break
-            lines.append(line)
-        user_input = "Bu kodu incele:\n```\n" + "\n".join(lines) + "\n```"
-    
-    print("\nAssistant > ", end="", flush=True)
-    answer = chat(user_input, max_tokens=max_tokens, temperature=temp)
-    print(answer)
+
+    conversation_history.append({"role": "assistant", "content": full_response})
+
+
+def read_pasted_code():
+    print("  Paste your code, then press Enter on an empty line:")
+    lines = []
+    while True:
+        line = input()
+        if line == "":
+            break
+        lines.append(line)
+    print(f"  ({len(lines)} lines received)")
+    return "Review this code:\n```\n" + "\n".join(lines) + "\n```"
+
+
+def main():
+    check_ollama()
+
+    print("=" * 60)
+    print(f"  ARKE CODE - local code assistant")
+    print("=" * 60)
+    print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings")
+
+    max_tokens = 2048
+    temp = 0.5
+
+    while True:
+        print()
+        user_input = input("You > ").strip()
+        if not user_input:
+            continue
+
+        if user_input == "/quit":
+            print("See you!")
+            break
+        if user_input == "/clear":
+            conversation_history.clear()
+            print("  History cleared.")
+            continue
+        if user_input.startswith("/temp "):
+            try:
+                temp = max(0.1, min(2.0, float(user_input.split()[1])))
+                print(f"  Temperature: {temp}")
+            except ValueError:
+                print("  Usage: /temp 0.5")
+            continue
+        if user_input == "/long":
+            max_tokens = 4096
+            print("  Max tokens: 4096")
+            continue
+        if user_input == "/short":
+            max_tokens = 512
+            print("  Max tokens: 512")
+            continue
+        if user_input == "/settings":
+            print(f"  Model: {MODEL_NAME} | Temp: {temp} | Max tokens: {max_tokens} "
+                  f"| History: {len(conversation_history)} messages")
+            continue
+        if user_input == "/paste":
+            user_input = read_pasted_code()
+
+        print(f"\nArke Code > ", end="", flush=True)
+        chat(user_input, max_tokens, temp)
+
+
+if __name__ == "__main__":
+    main()
