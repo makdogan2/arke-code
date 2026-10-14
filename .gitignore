@@ -229,3 +229,7 @@ combined_training_data.json
 
 # Eval: keep the score history, not every raw run
 results/*.json
+
+# Personal data: conversation logs and generated training sets stay local
+logs/
+data/

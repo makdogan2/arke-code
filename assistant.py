@@ -1,6 +1,8 @@
 import argparse
 import json
 import sys
+from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -12,6 +14,12 @@ MODEL_NAME = "arke-code"  # change here if the model is renamed
 
 conversation_history = []
 workspace = Workspace(".")
+
+# Every exchange is appended to logs/ so good ones can become training data (Phase 5).
+# Mark the last answer with /good or /bad; make_dataset.py keeps only /good ones.
+LOG_DIR = Path(__file__).parent / "logs"
+logging_on = True
+last_log_id = None
 
 
 def check_ollama():
@@ -67,6 +75,38 @@ def short(value, limit=60):
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+def log_path():
+    return LOG_DIR / f"conversations-{datetime.now():%Y-%m}.jsonl"
+
+
+def write_log(record):
+    if not logging_on:
+        return
+    LOG_DIR.mkdir(exist_ok=True)
+    with log_path().open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def log_exchange(temperature):
+    """Save the conversation as the model saw it, ending with this turn's answer."""
+    global last_log_id
+    last_log_id = f"{datetime.now():%Y%m%d-%H%M%S}-{len(conversation_history)}"
+    write_log({"id": last_log_id, "time": datetime.now().isoformat(timespec="seconds"),
+               "model": MODEL_NAME, "temperature": temperature,
+               "project": str(workspace.root), "messages": trimmed_history()})
+
+
+def rate_last(rating, note=""):
+    if not last_log_id:
+        print("  Nothing to rate yet.")
+    elif not logging_on:
+        print("  Logging is off (--no-log), so there is nothing to rate.")
+    else:
+        write_log({"rate": last_log_id, "rating": rating, "note": note,
+                   "time": datetime.now().isoformat(timespec="seconds")})
+        print(f"  Marked the last answer as {rating}.")
+
+
 def chat(user_message, max_tokens, temperature):
     conversation_history.append({"role": "user", "content": user_message})
     for _ in range(MAX_TOOL_ROUNDS):
@@ -77,6 +117,7 @@ def chat(user_message, max_tokens, temperature):
         conversation_history.append(message)
         if not tool_calls:
             print()
+            log_exchange(temperature)
             return
         for call in tool_calls:
             name = call["function"]["name"]
@@ -88,6 +129,7 @@ def chat(user_message, max_tokens, temperature):
             result = workspace.call(name, args)
             conversation_history.append({"role": "tool", "tool_name": name, "content": result})
     print("\n  (stopped: too many tool calls in a row)")
+    log_exchange(temperature)
 
 
 def read_pasted_code():
@@ -103,10 +145,13 @@ def read_pasted_code():
 
 
 def main():
-    global workspace
+    global workspace, logging_on
     ap = argparse.ArgumentParser(description="Arke Code, a local coding assistant.")
     ap.add_argument("--root", default=".", help="project folder the assistant may read (default: here)")
-    workspace = Workspace(ap.parse_args().root)
+    ap.add_argument("--no-log", action="store_true", help="do not save conversations to logs/")
+    args = ap.parse_args()
+    workspace = Workspace(args.root)
+    logging_on = not args.no_log
     check_ollama()
 
     print("=" * 60)
@@ -115,7 +160,9 @@ def main():
     print(f"Project: {workspace.root}")
     print("Tools: list_dir, read_file, grep, git_diff | ask first: edit_file, write_file, "
           "run_python, run_tests")
-    print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings")
+    print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings  /good  /bad")
+    if logging_on:
+        print(f"Logging to {log_path().relative_to(Path(__file__).parent)} (--no-log to turn off)")
 
     max_tokens = 2048
     temp = 0.5
@@ -151,6 +198,9 @@ def main():
         if user_input == "/settings":
             print(f"  Model: {MODEL_NAME} | Temp: {temp} | Max tokens: {max_tokens} "
                   f"| History: {len(conversation_history)} messages | Project: {workspace.root}")
+            continue
+        if user_input.split()[0] in ("/good", "/bad"):
+            rate_last(user_input.split()[0][1:], user_input[len(user_input.split()[0]):].strip())
             continue
         if user_input == "/paste":
             user_input = read_pasted_code()

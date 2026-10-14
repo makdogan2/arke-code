@@ -14,7 +14,7 @@ The name comes from the Greek *arkhe*: "first principle", the starting point of 
   - reads freely: `list_dir`, `read_file`, `grep`, `git_diff`
   - asks first, showing a diff or the exact command: `edit_file`, `write_file`, `run_python`,
     `run_tests` (default answer is no)
-- Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/quit`
+- Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/good`, `/bad`, `/quit`
 - Warm, concise persona defined in the `Modelfile`
 
 ## Results (v0.1)
@@ -106,6 +106,17 @@ python agent_eval.py --check   # every task fails as shipped and passes with its
 python agent_eval.py           # run all tasks; appends to results/agent_scores.csv
 ```
 
+## Training data (Phase 5, in progress)
+
+Arke Code collects its own fine-tuning data instead of borrowing a generic dataset:
+
+- `assistant.py` logs every exchange to `logs/` (local only, gitignored; `--no-log` turns it off).
+  Type `/good` or `/bad` after an answer to rate it.
+- `make_dataset.py` turns solved agent-eval runs (hidden tests passed, tests untouched) and
+  `/good`-rated chats into `data/sft.jsonl`, in the chat + tool-call format used by Unsloth and
+  TRL, with the Modelfile's system prompt in front. Only the rated turn of a chat is kept, so
+  unrated answers earlier in the same conversation are not learned from.
+
 ## Project structure
 
 | File | Purpose |
@@ -115,6 +126,7 @@ python agent_eval.py           # run all tasks; appends to results/agent_scores.
 | `examples/buggy_stats/` | Small project with a planted bug, for trying the agent |
 | `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
 | `agent_eval.py`, `evals/agent_tasks/` | End-to-end bug-fixing eval with hidden tests |
+| `make_dataset.py` | Builds fine-tuning data from solved agent runs and `/good` chats |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
 | `finetune.py` | QLoRA fine-tuning script from early experiments (4-bit, LoRA r=16, gradient checkpointing) |
