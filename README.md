@@ -25,6 +25,7 @@ Measured with `eval.py` on an RTX 5070 Ti, temperature 0, one attempt per task (
 |-----------|-------|
 | HumanEval, all 164 problems | **149 / 164 (90.9%)** |
 | Custom suite, 22 tasks | **20 / 22 (90.9%)** |
+| Agent eval, 6 bug-fixing tasks (hidden tests) | **5 / 6**, ~6 tool calls and ~27 s per task |
 | Generation speed | ~90 tokens/s |
 
 HumanEval is scored by this repo's own harness (the model returns the full function, which
