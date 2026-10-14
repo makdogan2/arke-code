@@ -1,0 +1,11 @@
+{
+  "id": "slugify",
+  "description": "Runs of non-alphanumeric characters become several dashes instead of one.",
+  "fix": [
+    {
+      "file": "text_utils.py",
+      "old": "re.sub(r\"[^a-z0-9]\", \"-\", text)",
+      "new": "re.sub(r\"[^a-z0-9]+\", \"-\", text)"
+    }
+  ]
+}

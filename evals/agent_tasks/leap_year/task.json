@@ -1,0 +1,11 @@
+{
+  "id": "leap_year",
+  "description": "is_leap() only checks divisibility by 4, so 1900 gets a 29-day February.",
+  "fix": [
+    {
+      "file": "calendar_utils.py",
+      "old": "    return year % 4 == 0\n",
+      "new": "    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)\n"
+    }
+  ]
+}

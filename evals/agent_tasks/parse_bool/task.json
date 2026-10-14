@@ -1,0 +1,11 @@
+{
+  "id": "parse_bool",
+  "description": "The failing test is in app.py's tests, but the bug lives in config.py (bool('false') is True).",
+  "fix": [
+    {
+      "file": "config.py",
+      "old": "    return bool(value)\n",
+      "new": "    text = str(value).strip().lower()\n    if text in (\"true\", \"yes\", \"on\", \"1\"):\n        return True\n    if text in (\"false\", \"no\", \"off\", \"0\"):\n        return False\n    raise ValueError(f\"not a boolean: {value!r}\")\n"
+    }
+  ]
+}

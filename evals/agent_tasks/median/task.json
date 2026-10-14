@@ -1,0 +1,11 @@
+{
+  "id": "median",
+  "description": "Even-length median returns one middle element instead of the mean of two.",
+  "fix": [
+    {
+      "file": "stats.py",
+      "old": "    return ordered[mid]\n",
+      "new": "    if len(ordered) % 2:\n        return ordered[mid]\n    return (ordered[mid - 1] + ordered[mid]) / 2\n"
+    }
+  ]
+}

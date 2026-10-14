@@ -1,0 +1,11 @@
+{
+  "id": "bank_account",
+  "description": "withdraw() lets the balance go negative instead of raising ValueError.",
+  "fix": [
+    {
+      "file": "bank.py",
+      "old": "            raise ValueError(\"withdrawal must be positive\")\n        self.balance -= amount\n",
+      "new": "            raise ValueError(\"withdrawal must be positive\")\n        if amount > self.balance:\n            raise ValueError(\"insufficient funds\")\n        self.balance -= amount\n"
+    }
+  ]
+}

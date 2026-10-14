@@ -90,6 +90,21 @@ python eval.py --model qwen3-coder --suite all
 - Generated code runs in a separate process with a timeout. Each run is saved under
   `results/`, and one summary line is appended to `results/scores.csv`.
 
+### Agent eval
+
+`agent_eval.py` scores the whole agent loop instead of single answers. Each task in
+`evals/agent_tasks/` is a tiny project with one planted bug and a failing test (median,
+pagination, slugs, a bank account, a bug that lives one file away from its failing test,
+leap years). The agent gets a fresh copy, its normal tools with every action auto-approved
+inside a throwaway folder, and one instruction: fix the bug without touching the tests.
+A task counts as solved only if the visible tests pass, **hidden tests it never saw** also
+pass, and the test files are unchanged, so test-shaped hacks and edited tests score zero.
+
+```
+python agent_eval.py --check   # every task fails as shipped and passes with its reference fix
+python agent_eval.py           # run all tasks; appends to results/agent_scores.csv
+```
+
 ## Project structure
 
 | File | Purpose |
@@ -98,6 +113,7 @@ python eval.py --model qwen3-coder --suite all
 | `tools.py` | Project tools confined to the workspace; changes and runs need confirmation |
 | `examples/buggy_stats/` | Small project with a planted bug, for trying the agent |
 | `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
+| `agent_eval.py`, `evals/agent_tasks/` | End-to-end bug-fixing eval with hidden tests |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
 | `finetune.py` | QLoRA fine-tuning script from early experiments (4-bit, LoRA r=16, gradient checkpointing) |
@@ -107,7 +123,7 @@ python eval.py --model qwen3-coder --suite all
 - [x] **Phase 0:** Ollama-based assistant with a custom persona
 - [x] **Phase 1:** Evaluation suite (custom tasks + HumanEval) with a recorded baseline
 - [ ] **Phase 2:** Agentic tools: read, search, edit, run tests and git diff with confirmation done;
-  next: an agent eval that scores bug fixing end to end
+  agent eval that scores bug fixing end to end done
 - [ ] **Phase 3:** Project memory (RAG with local embeddings)
 - [ ] **Phase 4:** VS Code integration
 - [ ] **Phase 5:** Continuous, eval-gated fine-tuning (QLoRA, GGUF export, back into Ollama)

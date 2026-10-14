@@ -1,0 +1,11 @@
+{
+  "id": "paginate",
+  "description": "Page numbers are 1-based but the slice start uses page * per_page.",
+  "fix": [
+    {
+      "file": "pages.py",
+      "old": "    start = page * per_page\n",
+      "new": "    start = (page - 1) * per_page\n"
+    }
+  ]
+}
