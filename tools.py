@@ -71,6 +71,8 @@ class Workspace:
     # ---------------------------------------------------------------- helpers
 
     def resolve(self, path):
+        """Turn a path from the model into an absolute path inside the project folder.
+        Anything that would escape it, such as '../secret.txt', raises ToolError."""
         target = (self.root / (path or ".")).resolve()
         if target != self.root and self.root not in target.parents:
             raise ToolError(f"'{path}' is outside the workspace; use paths relative to the project root")
