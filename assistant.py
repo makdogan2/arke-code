@@ -46,6 +46,10 @@ def trimmed_history(limit=30):
     return msgs
 
 
+class OllamaError(Exception):
+    pass
+
+
 def stream_reply(max_tokens, temperature):
     """One model call. Streams text to the screen, returns (text, tool_calls)."""
     payload = {
@@ -57,7 +61,13 @@ def stream_reply(max_tokens, temperature):
     }
     text, tool_calls = "", []
     with requests.post(f"{OLLAMA_URL}/api/chat", json=payload, stream=True) as r:
-        r.raise_for_status()
+        if r.status_code != 200:
+            # Ollama explains what went wrong in the body, e.g. "model requires more system memory"
+            try:
+                detail = r.json().get("error", r.text)
+            except ValueError:
+                detail = r.text
+            raise OllamaError(f"Ollama returned {r.status_code}: {detail}")
         for line in r.iter_lines():
             if not line:
                 continue
@@ -206,7 +216,16 @@ def main():
             user_input = read_pasted_code()
 
         print("\nArke Code > ", end="", flush=True)
-        chat(user_input, max_tokens, temp)
+        try:
+            chat(user_input, max_tokens, temp)
+        except (OllamaError, requests.exceptions.RequestException) as e:
+            # keep the session alive; drop the unanswered question so history stays valid
+            while conversation_history and conversation_history[-1]["role"] != "user":
+                conversation_history.pop()
+            if conversation_history:
+                conversation_history.pop()
+            print(f"\n  [error] {e}")
+            print("  Check 'ollama ps' and the Ollama app, then ask again.")
 
 
 if __name__ == "__main__":
