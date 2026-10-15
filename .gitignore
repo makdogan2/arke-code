@@ -233,3 +233,4 @@ results/*.json
 # Personal data: conversation logs and generated training sets stay local
 logs/
 data/
+.arke_index.json
