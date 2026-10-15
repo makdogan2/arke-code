@@ -2,7 +2,7 @@
 
 Two groups:
 
-- Read-only (run immediately): list_dir, read_file, grep, git_diff.
+- Read-only (run immediately): list_dir, read_file, grep, search_code, git_diff.
 - Changing or executing (need the user's yes first): edit_file, write_file,
   run_python, run_tests. Before asking, the user sees exactly what will happen:
   a diff for file changes, the command for runs.
@@ -192,6 +192,25 @@ class Workspace:
             raise ToolError(proc.stderr.strip() or "not a git repository")
         return clip(proc.stdout.strip()) or "No uncommitted changes."
 
+    def search_code(self, query, k=5):
+        """Find code by meaning with the project's embedding index (rag.py)."""
+        import requests
+
+        import rag
+        try:
+            hits = rag.search(query, int(k), root=self.root)
+        except requests.exceptions.RequestException:
+            raise ToolError("code search needs Ollama with the embedding model: "
+                            "run 'ollama pull nomic-embed-text'") from None
+        if not hits:
+            return "There are no .py or .md files to search in this project."
+        parts = []
+        for score, c in hits:
+            preview = "\n".join("    " + l for l in c["text"].strip().splitlines()[:3])
+            parts.append(f"{c['path']}:{c['start']}-{c['end']}  (similarity {score:.2f})\n{preview}")
+        return ("Closest code by meaning; read_file the parts that look relevant:\n\n"
+                + "\n\n".join(parts))
+
     # -------------------------------------------- tools that need permission
 
     def edit_file(self, path, old_text, new_text):
@@ -256,6 +275,7 @@ class Workspace:
         """Run a tool by name. Errors come back as text so the model can react."""
         funcs = {
             "list_dir": self.list_dir, "read_file": self.read_file, "grep": self.grep,
+            "search_code": self.search_code,
             "git_diff": self.git_diff, "edit_file": self.edit_file, "write_file": self.write_file,
             "run_python": self.run_python, "run_tests": self.run_tests,
         }
@@ -293,6 +313,14 @@ TOOL_SPECS = [
           {"pattern": {"type": "string", "description": "Python regular expression"},
            "path": {"type": "string", "description": "File or folder to search, default '.'"}},
           ["pattern"]),
+    _spec("search_code",
+          "Find code by what it does, not by exact words: 'where are passwords checked', "
+          "'what saves the settings'. Returns the closest functions with file and line numbers. "
+          "Use it when you do not know which file handles something, then read_file the hits. "
+          "For an exact name or string, grep is better.",
+          {"query": {"type": "string", "description": "What you are looking for, in plain words"},
+           "k": {"type": "integer", "description": "How many results, default 5"}},
+          ["query"]),
     _spec("git_diff",
           "Show uncommitted changes in the project (git diff).",
           {"path": {"type": "string", "description": "Limit to this file or folder (optional)"}}),

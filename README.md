@@ -11,7 +11,7 @@ The name comes from the Greek *arkhe*: "first principle", the starting point of 
 - Runs 100% locally: no API keys, no data leaves your machine
 - Streaming responses with conversation memory
 - Works on your project through Ollama tool calling, confined to the project folder:
-  - reads freely: `list_dir`, `read_file`, `grep`, `git_diff`
+  - reads freely: `list_dir`, `read_file`, `grep`, `search_code`, `git_diff`
   - asks first, showing a diff or the exact command: `edit_file`, `write_file`, `run_python`,
     `run_tests` (default answer is no)
 - Chat commands: `/paste`, `/long`, `/short`, `/temp`, `/clear`, `/settings`, `/good`, `/bad`, `/quit`
@@ -106,6 +106,20 @@ python agent_eval.py --check   # every task fails as shipped and passes with its
 python agent_eval.py           # run all tasks; appends to results/agent_scores.csv
 ```
 
+## Project memory (Phase 3)
+
+`rag.py` splits every `.py` file into functions and methods (with Python's `ast` module) and
+Markdown into 40-line windows, embeds each piece with `nomic-embed-text`, and keeps the
+vectors in `.arke_index.json` inside the project. A search embeds the question and returns the
+pieces with the highest cosine similarity. The index refreshes itself: only files whose size or
+modification time changed are embedded again. The agent reaches it through the `search_code`
+tool, then reads the hits with `read_file`; for exact names, `grep` is still the better tool.
+
+```
+ollama pull nomic-embed-text
+python rag.py search "where are file paths checked so the model cannot leave the project folder"
+```
+
 ## Training data (Phase 5, in progress)
 
 Arke Code collects its own fine-tuning data instead of borrowing a generic dataset:
@@ -127,6 +141,7 @@ Arke Code collects its own fine-tuning data instead of borrowing a generic datas
 | `eval.py`, `evals/` | Evaluation harness, custom tasks and cached HumanEval data |
 | `agent_eval.py`, `evals/agent_tasks/` | End-to-end bug-fixing eval with hidden tests |
 | `make_dataset.py` | Builds fine-tuning data from solved agent runs and `/good` chats |
+| `rag.py`, `embed_demo.py` | Code search by meaning: chunking by function, embeddings, cosine similarity |
 | `Modelfile` | Base model, system prompt and parameters |
 | `training_data.py`, `training_data.json` | Small hand-written dataset from early experiments |
 | `finetune.py` | QLoRA fine-tuning script from early experiments (4-bit, LoRA r=16, gradient checkpointing) |
@@ -137,7 +152,8 @@ Arke Code collects its own fine-tuning data instead of borrowing a generic datas
 - [x] **Phase 1:** Evaluation suite (custom tasks + HumanEval) with a recorded baseline
 - [ ] **Phase 2:** Agentic tools: read, search, edit, run tests and git diff with confirmation done;
   agent eval that scores bug fixing end to end done
-- [ ] **Phase 3:** Project memory (RAG with local embeddings)
+- [x] **Phase 3:** Project memory: `search_code` finds functions by meaning (nomic-embed-text,
+  incremental index)
 - [ ] **Phase 4:** VS Code integration
 - [ ] **Phase 5:** Continuous, eval-gated fine-tuning (QLoRA, GGUF export, back into Ollama)
 

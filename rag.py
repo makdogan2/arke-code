@@ -1,7 +1,10 @@
-﻿"""Project memory for Arke Code: find code by meaning, not by exact words.
+"""Project memory for Arke Code: find code by meaning, not by exact words.
 
     python rag.py index                  # embed every .py / .md file in the project
     python rag.py search "your question" # show the 5 closest pieces of code
+
+Searching also refreshes the index: only files that changed since the last run are
+embedded again. Arke Code uses the same functions through its search_code tool.
 """
 
 import ast
@@ -71,35 +74,67 @@ def chunk_text(text):
             for i in range(0, len(lines), WINDOW)]
 
 
-def build_index():
-    chunks = []
-    for p in sorted(ROOT.rglob("*")):
-        rel = p.relative_to(ROOT)
-        if any(part in SKIP for part in rel.parts) or p.suffix not in (".py", ".md"):
-            continue
-        text = p.read_text(encoding="utf-8")
-        try:
-            pieces = chunk_python(text) if p.suffix == ".py" else chunk_text(text)
-        except SyntaxError:
-            pieces = chunk_text(text)
-        for start, end, body in pieces:
-            chunks.append({"path": rel.as_posix(), "start": start, "end": end, "text": body})
+def project_files(root):
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root)
+        if p.is_file() and p.suffix in (".py", ".md") and not any(part in SKIP for part in rel.parts):
+            yield p, rel.as_posix()
 
-    print(f"Embedding {len(chunks)} chunks from the project...")
-    for i in range(0, len(chunks), 32):
-        batch = chunks[i:i + 32]
+
+def chunk_file(path):
+    text = path.read_text(encoding="utf-8-sig", errors="replace")  # -sig drops a BOM
+    try:
+        return chunk_python(text) if path.suffix == ".py" else chunk_text(text)
+    except SyntaxError:
+        return chunk_text(text)
+
+
+def update_index(root=ROOT, verbose=False):
+    """Bring root/.arke_index.json up to date and return its chunks.
+    Files whose size and modification time did not change keep their old vectors,
+    so only new or edited files are embedded again."""
+    root = Path(root).resolve()
+    index_path = root / INDEX.name
+    old = {}
+    if index_path.exists():
+        saved = json.loads(index_path.read_text(encoding="utf-8"))
+        if saved.get("model") == MODEL:
+            for c in saved["chunks"]:
+                old.setdefault(c["path"], []).append(c)
+
+    chunks, todo, reused = [], [], 0
+    for path, rel in project_files(root):
+        stat = path.stat()
+        stamp = f"{stat.st_size}:{stat.st_mtime_ns}"
+        previous = old.get(rel, [])
+        if previous and previous[0].get("stamp") == stamp:
+            chunks += previous
+            reused += 1
+            continue
+        for start, end, body in chunk_file(path):
+            c = {"path": rel, "start": start, "end": end, "text": body, "stamp": stamp}
+            chunks.append(c)
+            todo.append(c)
+
+    for i in range(0, len(todo), 32):
+        batch = todo[i:i + 32]
         docs = [f"search_document: {c['path']} lines {c['start']}-{c['end']}\n{c['text'][:2000]}"
                 for c in batch]
         for c, v in zip(batch, embed(docs)):
             c["vector"] = normalize(v)
-    INDEX.write_text(json.dumps({"model": MODEL, "chunks": chunks}), encoding="utf-8")
-    print(f"Saved {INDEX.name}")
+
+    if todo or len(chunks) != sum(len(v) for v in old.values()):
+        index_path.write_text(json.dumps({"model": MODEL, "chunks": chunks}), encoding="utf-8")
+    if verbose:
+        print(f"{len(chunks)} chunks: {len(todo)} embedded now, {reused} files unchanged -> {index_path.name}")
+    return chunks
 
 
-def search(query, k=5):
-    if not INDEX.exists():
-        sys.exit("No index yet. Run: python rag.py index")
-    chunks = json.loads(INDEX.read_text(encoding="utf-8"))["chunks"]
+def search(query, k=5, root=ROOT):
+    """Return [(score, chunk), ...] for the k chunks closest in meaning to the query."""
+    chunks = update_index(root)
+    if not chunks:
+        return []
     q = normalize(embed(["search_query: " + query])[0])
     # both vectors have length 1, so the dot product is the cosine similarity
     scored = sorted(((sum(a * b for a, b in zip(q, c["vector"])), c) for c in chunks),
@@ -109,7 +144,7 @@ def search(query, k=5):
 
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "index":
-        build_index()
+        update_index(verbose=True)
     elif len(sys.argv) >= 3 and sys.argv[1] == "search":
         for score, c in search(" ".join(sys.argv[2:])):
             first = c["text"].strip().splitlines()[0][:70]

@@ -158,7 +158,7 @@ def main():
     print("  ARKE CODE - local code assistant")
     print("=" * 60)
     print(f"Project: {workspace.root}")
-    print("Tools: list_dir, read_file, grep, git_diff | ask first: edit_file, write_file, "
+    print("Tools: list_dir, read_file, grep, search_code, git_diff | ask first: edit_file, write_file, "
           "run_python, run_tests")
     print("Commands: /quit  /clear  /temp 0.5  /long  /short  /paste  /settings  /good  /bad")
     if logging_on:
